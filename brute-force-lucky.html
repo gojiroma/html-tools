@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>総当たり I'm Feeling Lucky</title>
+<style>
+  :root{
+    --ink:#16233f;
+    --paper:#eef2f5;
+    --card:#ffffff;
+    --lot:#ffd21e;
+    --lot-dark:#c99a00;
+    --line:#c8d3dd;
+    --dim:#65758a;
+    --done:#9aa8b8;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:28px 18px 64px;
+    background:var(--paper); color:var(--ink);
+    font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    line-height:1.7;
+  }
+  .wrap{max-width:820px; margin:0 auto}
+  h1{
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    font-size:clamp(23px,5vw,34px); letter-spacing:.06em; margin:0 0 4px;
+  }
+  h1 .arrow{color:var(--lot-dark)}
+  .lead{margin:0 0 22px; color:var(--dim); font-size:14px}
+
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px}
+
+  .cols{display:flex; gap:14px; flex-wrap:wrap}
+  .col{flex:1 1 280px; min-width:0}
+  label{display:block; font-size:12px; color:var(--dim); margin-bottom:4px; letter-spacing:.04em}
+  textarea{
+    width:100%; height:190px; resize:vertical;
+    font:inherit; font-size:14px; line-height:1.9; padding:9px 10px;
+    border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink);
+  }
+  input,select{
+    font:inherit; font-size:15px; padding:7px 9px;
+    border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink);
+  }
+  input[type=number]{width:74px}
+
+  .row{display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; margin-top:14px}
+
+  button{font:inherit; cursor:pointer; border-radius:6px; border:1px solid var(--ink)}
+  .go{
+    display:block; width:100%; margin:18px 0 4px;
+    padding:16px; font-size:19px; font-weight:700; letter-spacing:.06em;
+    background:var(--lot); border-bottom-width:4px; transition:transform .06s;
+  }
+  .go:active{transform:translateY(2px); border-bottom-width:2px}
+  .go[disabled]{background:#e4e9ee; color:var(--dim); border-color:var(--line); cursor:default; transform:none}
+  .sub{background:#fff; color:var(--ink); border-color:var(--line); padding:6px 12px; font-size:13px}
+  .sub:hover{background:#f4f7fa}
+
+  .meter{height:6px; background:#dde4ea; border-radius:3px; overflow:hidden; margin:10px 0 6px}
+  .meter i{display:block; height:100%; width:0; background:var(--lot-dark); transition:width .3s}
+  .status{font-size:13px; color:var(--dim); min-height:1.7em; margin:0 2px}
+
+  .queue{
+    margin-top:8px; max-height:340px; overflow:auto;
+    border:1px solid var(--line); border-radius:8px; background:var(--card);
+  }
+  .queue ol{list-style:none; margin:0; padding:0; counter-reset:n}
+  .queue li{
+    counter-increment:n; display:flex; align-items:center; gap:11px;
+    padding:8px 13px; border-bottom:1px solid #eef1f4; font-size:15px;
+  }
+  .queue li:last-child{border-bottom:0}
+  .queue li::before{
+    content:counter(n); font-size:11px; color:var(--dim);
+    min-width:2.2em; text-align:right; font-variant-numeric:tabular-nums;
+  }
+  .queue a{color:var(--ink); text-decoration:none; flex:1; word-break:break-all}
+  .queue a:hover{text-decoration:underline}
+  .queue li.done{background:#f6f8fa}
+  .queue li.done a{color:var(--done)}
+  .queue li.done::after{content:"開"; font-size:11px; color:var(--done)}
+  .queue li.next{border-left:4px solid var(--lot); padding-left:9px}
+  .empty{padding:22px 14px; color:var(--dim); font-size:13px; text-align:center}
+
+  details{margin-top:22px; font-size:13px; color:var(--dim)}
+  summary{cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>総当たり <span class="arrow">×</span> I'm Feeling Lucky</h1>
+  <p class="lead">2つのリストの全組み合わせを作り、上から順に1件目のページへ飛びます。</p>
+
+  <div class="panel">
+    <div class="cols">
+      <div class="col">
+        <label for="listA">キーワード（1行に1つ）</label>
+        <textarea id="listA" placeholder="レオタード&#10;サンプリング&#10;激痛&#10;黄金の林檎"></textarea>
+      </div>
+      <div class="col">
+        <label for="listB">組み合わせる語（1行に1つ・空欄可）</label>
+        <textarea id="listB" placeholder="ブログ&#10;日記&#10;個人サイト"></textarea>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="count">一度に開く数</label>
+        <input type="number" id="count" value="7" min="1" max="20">
+      </div>
+      <div>
+        <label for="engine">飛び先</label>
+        <select id="engine">
+          <option value="ddg">DuckDuckGo で1件目へ</option>
+          <option value="google">Google I'm Feeling Lucky</option>
+          <option value="glist">Google の検索結果一覧</option>
+        </select>
+      </div>
+      <div>
+        <label for="order">並び</label>
+        <select id="order">
+          <option value="seq">リスト順</option>
+          <option value="shuffle">シャッフル</option>
+        </select>
+      </div>
+      <button class="sub" id="build">組み合わせを作る</button>
+      <button class="sub" id="reset">開封済みを戻す</button>
+    </div>
+
+    <button class="go" id="go" disabled>次の7件を開く</button>
+    <div class="meter"><i id="bar"></i></div>
+    <div class="status" id="status">両方のリストを入れて「組み合わせを作る」を押してください。</div>
+  </div>
+
+  <div class="queue" id="queue"><div class="empty">組み合わせはまだありません</div></div>
+
+  <details>
+    <summary>使い方のメモ</summary>
+    <p>組み合わせは「キーワード 半角スペース 組み合わせる語」の順で作られます。右のリストを空にすると、左のキーワード単体で検索します。<br>
+    ポップアップがブロックされた場合は、このページのポップアップを許可するか、一覧のリンクを直接クリックしてください。開いた分は自動で開封済みになります。<br>
+    「一度に開く数」を大きくしすぎるとブラウザが重くなります。7〜10件くらいが実用的です。</p>
+  </details>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let queue = [];   // {q, done}
+let cursor = 0;
+
+function parseLines(text){
+  const seen = new Set();
+  return text.split(/\r?\n/).map(s => s.trim()).filter(s => {
+    if(!s || seen.has(s)) return false;
+    seen.add(s); return true;
+  });
+}
+
+function buildURL(q){
+  const engine = $('engine').value;
+  if(engine === 'ddg')    return 'https://duckduckgo.com/?q=' + encodeURIComponent('\\' + q);
+  if(engine === 'google') return 'https://www.google.com/search?btnI=I&q=' + encodeURIComponent(q);
+  return 'https://www.google.com/search?q=' + encodeURIComponent(q);
+}
+
+function build(){
+  const a = parseLines($('listA').value);
+  const b = parseLines($('listB').value);
+
+  if(!a.length){
+    queue = []; cursor = 0; render();
+    $('status').textContent = '左のキーワード欄が空です。';
+    return;
+  }
+
+  const combos = [];
+  if(b.length){
+    a.forEach(x => b.forEach(y => combos.push(x + ' ' + y)));
+  }else{
+    a.forEach(x => combos.push(x));
+  }
+
+  if($('order').value === 'shuffle'){
+    for(let i = combos.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [combos[i], combos[j]] = [combos[j], combos[i]];
+    }
+  }
+
+  queue = combos.map(q => ({q, done:false}));
+  cursor = 0;
+  render();
+  $('status').textContent = `${a.length} × ${b.length || 1} = ${queue.length}件の組み合わせができました。`;
+}
+
+function render(){
+  const box = $('queue');
+  const n = Math.max(1, Math.min(20, parseInt($('count').value) || 7));
+
+  if(!queue.length){
+    box.innerHTML = '<div class="empty">組み合わせはまだありません</div>';
+  }else{
+    const ol = document.createElement('ol');
+    queue.forEach((item, i) => {
+      const li = document.createElement('li');
+      if(item.done) li.className = 'done';
+      else if(i >= cursor && i < cursor + n) li.className = 'next';
+      const a = document.createElement('a');
+      a.href = buildURL(item.q);
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = item.q;
+      a.addEventListener('click', () => { item.done = true; if(i === cursor) advance(); render(); });
+      li.appendChild(a);
+      ol.appendChild(li);
+    });
+    box.innerHTML = '';
+    box.appendChild(ol);
+  }
+
+  const done = queue.filter(x => x.done).length;
+  $('bar').style.width = queue.length ? (done / queue.length * 100) + '%' : '0';
+
+  const go = $('go');
+  const remain = queue.length - cursor;
+  go.disabled = remain <= 0;
+  go.textContent = remain > 0
+    ? `次の${Math.min(n, remain)}件を開く（残り${remain}）`
+    : (queue.length ? 'すべて開きました' : '組み合わせがありません');
+}
+
+function advance(){
+  while(cursor < queue.length && queue[cursor].done) cursor++;
+}
+
+$('go').addEventListener('click', () => {
+  const n = Math.max(1, Math.min(20, parseInt($('count').value) || 7));
+  let opened = 0, blocked = 0;
+
+  // await を挟まず同期で開く。非同期にするとポップアップが全部ブロックされる。
+  while(opened < n && cursor < queue.length){
+    const item = queue[cursor];
+    if(item.done){ cursor++; continue; }
+    if(!window.open(buildURL(item.q), '_blank')) blocked++;
+    item.done = true;
+    cursor++; opened++;
+  }
+
+  render();
+  const done = queue.filter(x => x.done).length;
+  $('status').textContent = blocked
+    ? `${opened}件中${blocked}件がポップアップブロックされました。一覧のリンクから開けます。（${done}/${queue.length}）`
+    : `${opened}件開きました。（${done}/${queue.length}）`;
+});
+
+$('build').addEventListener('click', build);
+$('reset').addEventListener('click', () => {
+  queue.forEach(x => x.done = false);
+  cursor = 0;
+  render();
+  $('status').textContent = '開封済みを戻しました。最初から開き直せます。';
+});
+$('count').addEventListener('input', render);
+$('engine').addEventListener('change', render);
+
+render();
+</script>
+</body>
+</html>
