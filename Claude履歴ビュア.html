@@ -67,7 +67,15 @@ body.dragover #app{outline:3px dashed var(--accent);outline-offset:-6px}
 .item{padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer}
 .item:hover{background:color-mix(in srgb,var(--line) 40%,transparent)}
 .item.sel{background:color-mix(in srgb,var(--accent) 14%,transparent);box-shadow:inset 3px 0 var(--accent)}
-.it-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.it-top{display:flex;align-items:center;gap:6px}
+.it-title{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.star{border:0;background:none;cursor:pointer;color:var(--sub);font-size:17px;line-height:1;padding:0 2px}
+.star:hover{color:#e0a100}
+.star.on{color:#e0a100}
+#rhead h1 .star{font-size:20px;vertical-align:-2px;margin-right:4px}
+.favrow{margin-top:6px}
+.btn.on{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.nohit{color:var(--sub);text-align:center;margin:28px 16px;font-size:13px}
 .it-meta{color:var(--sub);font-size:11px}
 .it-snip{color:var(--sub);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
 #more{display:block;margin:10px auto}
@@ -137,6 +145,7 @@ mark.cur{outline:2px solid var(--accent)}
   <section class="pane" id="p-list">
     <div class="searchbox">
       <input id="q" type="search" placeholder="タイトル・本文を検索（空白でAND／ひらがな⇔カタカナ・全角⇔半角を区別しない）" autocomplete="off">
+      <div class="favrow"><button id="favbtn" class="btn"><span id="favmark">☆</span> お気に入りのみ <span id="favcnt">0</span></button></div>
       <div id="filters"></div>
       <div class="hist-head"><span>検索履歴</span><button id="histclear" class="lnk">全削除</button></div>
       <div id="chips"></div>
@@ -155,6 +164,14 @@ const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,"0");
 const LS_KEY="chatviewer.searchHistory.v1";
 const isNarrow=()=>matchMedia("(max-width:900px)").matches;
+const FAV_KEY="chatviewer.favorites.v1",FAVONLY_KEY="chatviewer.favOnly.v1";
+function loadFavs(){
+  try{const o=JSON.parse(localStorage.getItem(FAV_KEY)||"{}");return o&&typeof o==="object"&&!Array.isArray(o)?o:{}}catch(e){return{}}
+}
+function saveFavs(){try{localStorage.setItem(FAV_KEY,JSON.stringify(favs))}catch(e){}}
+let favs=loadFavs();
+let favOnly=false;
+try{favOnly=localStorage.getItem(FAVONLY_KEY)==="1"}catch(e){}
 
 let threads=[],byId=new Map();
 let range=null;           // "YYYY-MM-DD" | "YYYY-MM"
@@ -230,7 +247,7 @@ function buildThread(c,i){
   const firstHuman=msgs.find(m=>/^(human|user)$/.test(m.sender)&&m.bl.some(b=>b.k==="text"));
   const preview=((firstHuman?firstHuman.bl.find(b=>b.k==="text").v:raw)||"").replace(/\s+/g," ").slice(0,90);
   return{
-    id:String(i),name,created,updated,summary:c.summary||"",msgs,days,raw,preview,
+    id:String(i),key:String(c.uuid||c.id||("n:"+name+"|"+created)),name,created,updated,summary:c.summary||"",msgs,days,raw,preview,
     ts:Date.parse(updated)||Date.parse(created)||0,
     titleN:foldChunk(name),allN:foldChunk(name+"\n"+raw),html:[]
   };
@@ -304,7 +321,9 @@ function setThreads(all){
 /* ---------- 絞り込み ---------- */
 function hasRange(t,r){for(const k of t.days.keys())if(k.startsWith(r))return true;return false}
 function applyFilters(){
-  let arr=terms.length?threads.filter(t=>terms.every(x=>t.allN.includes(x))):threads;
+  updateFavUI();
+  let arr=favOnly?threads.filter(t=>favs[t.key]):threads;
+  if(terms.length)arr=arr.filter(t=>terms.every(x=>t.allN.includes(x)));
   heatSource=arr;
   if(range)arr=arr.filter(t=>hasRange(t,range));
   const tHit=t=>terms.length&&terms.every(x=>t.titleN.includes(x))?0:1;
@@ -416,7 +435,8 @@ function itemEl(t){
   const h=document.createElement("div");h.className="it-title";h.append(hlText(t.name||"(無題)"));
   const m=document.createElement("div");m.className="it-meta";m.textContent=`${fmtDate(t.updated||t.created)} · ${t.msgs.length}件`;
   const s=document.createElement("div");s.className="it-snip";s.append(hlText(snip(t)));
-  d.append(h,m,s);
+  const top=document.createElement("div");top.className="it-top";top.append(h,makeStar(t));
+  d.append(top,m,s);
   return d;
 }
 function renderList(){
@@ -429,11 +449,49 @@ function renderList(){
     b.onclick=()=>{shown+=PAGE;renderList()};
     frag.append(b);
   }
+  if(!filtered.length&&threads.length){
+    const e=document.createElement("div");e.className="nohit";
+    e.textContent=favOnly&&!Object.keys(favs).length?"お気に入りはまだありません。スレッドの☆で登録できます":"該当するスレッドがありません";
+    frag.append(e);
+  }
   $("list").replaceChildren(frag);
 }
 $("list").addEventListener("click",e=>{
   const it=e.target.closest(".item");if(it)openThread(it.dataset.id);
 });
+/* ---------- お気に入り ---------- */
+function makeStar(t){
+  const on=!!favs[t.key];
+  const b=document.createElement("button");
+  b.className="star"+(on?" on":"");b.dataset.id=t.id;b.textContent=on?"★":"☆";b.title="お気に入り";
+  return b;
+}
+function updateStarEls(t){
+  const on=!!favs[t.key];
+  document.querySelectorAll('.star[data-id="'+t.id+'"]').forEach(el=>{el.classList.toggle("on",on);el.textContent=on?"★":"☆"});
+}
+function updateFavUI(){
+  const n=threads.reduce((a,t)=>a+(favs[t.key]?1:0),0);
+  $("favbtn").classList.toggle("on",favOnly);
+  $("favmark").textContent=favOnly?"★":"☆";
+  $("favcnt").textContent=n;
+}
+function toggleFav(t){
+  if(favs[t.key])delete favs[t.key];else favs[t.key]=Date.now();
+  saveFavs();updateStarEls(t);updateFavUI();
+  if(favOnly)applyFilters();
+}
+// リスト・本文どちらの☆も、スレッドを開く処理より先にここで受ける
+document.addEventListener("click",e=>{
+  const b=e.target.closest(".star");if(!b)return;
+  e.stopPropagation();
+  const t=byId.get(b.dataset.id);if(t)toggleFav(t);
+},true);
+$("favbtn").onclick=()=>{
+  favOnly=!favOnly;
+  try{localStorage.setItem(FAVONLY_KEY,favOnly?"1":"0")}catch(e){}
+  applyFilters();
+};
 function renderFilters(){
   const box=$("filters");box.replaceChildren();
   if(range){
@@ -474,7 +532,7 @@ function clearReader(){
 }
 function renderReader(t,{scroll=true}={}){
   const head=$("rhead");head.replaceChildren();
-  const h1=document.createElement("h1");h1.append(hlText(t.name||"(無題)"));
+  const h1=document.createElement("h1");h1.append(makeStar(t),hlText(t.name||"(無題)"));
   const meta=document.createElement("div");meta.className="meta";
   const info=document.createElement("span");
   info.textContent=`${fmtDate(t.created)} 〜 ${fmtDate(t.updated)} ・ ${t.msgs.length}件`;
@@ -591,6 +649,7 @@ addEventListener("drop",e=>{
 });
 
 renderHistory();
+updateFavUI();
 renderCal();
 // 前回保存したデータがあれば自動で表示
 (async()=>{
