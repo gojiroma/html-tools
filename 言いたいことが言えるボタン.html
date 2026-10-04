@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>言いたいことが言えるボタン</title>
+<style>
+  :root{
+    --bg:#f3f1ec;
+    --ink:#2e2b27;
+    --sub:#8a8377;
+    --line:#ddd7cc;
+    --card:#faf9f6;
+    --boundary:#4c5b72;
+    --boundary-bg:#e9edf1;
+    --relation:#a9614a;
+    --relation-bg:#f5e9e3;
+    --press:#efece5;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#1d1c19; --ink:#eae6de; --sub:#948d81; --line:#3a372f;
+      --card:#252420; --boundary-bg:#222b34; --relation-bg:#33251f; --press:#2b2a26;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#1d1c19; --ink:#eae6de; --sub:#948d81; --line:#3a372f;
+    --card:#252420; --boundary-bg:#222b34; --relation-bg:#33251f; --press:#2b2a26;
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--bg);}
+  body{
+    min-height:100%;
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    padding:28px 18px 44px;
+    max-width:480px;
+    margin:0 auto;
+  }
+  h1{
+    font-family:Georgia,"Hiragino Mincho ProN",serif;
+    font-weight:normal;
+    font-size:1.35rem;
+    margin:0 0 6px;
+    letter-spacing:.02em;
+  }
+  p.lead{
+    color:var(--sub);
+    font-size:0.88rem;
+    line-height:1.6;
+    margin:0 0 30px;
+    max-width:34ch;
+  }
+  section{margin-bottom:26px;}
+  section h2{
+    font-size:0.82rem;
+    color:var(--sub);
+    font-weight:600;
+    margin:0 0 10px;
+    padding-left:1px;
+  }
+  .grid{display:flex;flex-direction:column;gap:8px;}
+  button.phrase{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:13px 14px 13px 16px;
+    border:none;
+    border-bottom:1px solid var(--line);
+    border-left:3px solid transparent;
+    background:var(--card);
+    color:var(--ink);
+    font-size:0.96rem;
+    line-height:1.45;
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .grid button.phrase:first-child{border-top:1px solid var(--line);}
+  button.phrase.boundary{border-left-color:var(--boundary);}
+  button.phrase.relation{border-left-color:var(--relation);}
+  button.phrase:active{background:var(--press);}
+  button.phrase.speaking{background:var(--press);}
+  button.phrase:focus-visible{outline:2px solid var(--ink);outline-offset:-2px;}
+  @media (prefers-reduced-motion: no-preference){
+    button.phrase{transition:background .1s ease;}
+  }
+  footer{
+    text-align:center;
+    color:var(--sub);
+    font-size:0.76rem;
+    margin-top:8px;
+  }
+</style>
+</head>
+<body>
+
+<h1>言いたいことが言えるボタン</h1>
+<p class="lead">押すと声になる。使わなくても、ここにあるだけでいい。</p>
+
+<section>
+  <h2>境界を守る・今すぐ</h2>
+  <div class="grid">
+    <button class="phrase boundary">今のは困ります</button>
+    <button class="phrase boundary">それは嫌です</button>
+    <button class="phrase boundary">ちょっと待ってください</button>
+  </div>
+</section>
+
+<section>
+  <h2>境界を守る・時間を置く</h2>
+  <div class="grid">
+    <button class="phrase boundary">ちょっとだけ考えさせてもらっていいですか</button>
+    <button class="phrase boundary">1時間後でもいいですか</button>
+    <button class="phrase boundary">ちょっと待っていただいてもよろしいですか</button>
+  </div>
+</section>
+
+<section>
+  <h2>関係を深める・今すぐ</h2>
+  <div class="grid">
+    <button class="phrase relation">ありがとう、助かった</button>
+    <button class="phrase relation">それ聞けてよかった</button>
+    <button class="phrase relation">一緒にいると落ち着く</button>
+  </div>
+</section>
+
+<section>
+  <h2>関係を深める・時間を置く</h2>
+  <div class="grid">
+    <button class="phrase relation">実は困ってることがあって、聞いてもらえますか</button>
+    <button class="phrase relation">本当はこう思ってた</button>
+    <button class="phrase relation">今度ちゃんと話したいことがある</button>
+  </div>
+</section>
+
+<footer>仮の並び。合わなければ差し替えて。</footer>
+
+<script>
+(function(){
+  var buttons = document.querySelectorAll('button.phrase');
+  buttons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var text = btn.textContent;
+      try{
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ja-JP';
+        u.rate = 1.0;
+        buttons.forEach(function(b){ b.classList.remove('speaking'); });
+        btn.classList.add('speaking');
+        u.onend = function(){ btn.classList.remove('speaking'); };
+        u.onerror = function(){ btn.classList.remove('speaking'); };
+        window.speechSynthesis.speak(u);
+      }catch(e){
+        console.error('speech error', e);
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
