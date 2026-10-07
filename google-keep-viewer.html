@@ -63,6 +63,9 @@ body.dragover #app{outline:3px dashed var(--accent);outline-offset:-6px}
 .tag{border-radius:4px;padding:0 5px;font-size:10px;background:color-mix(in srgb,var(--line) 80%,transparent)}
 .tag.warn{background:#f6d6d2;color:#8a2a20}
 .it-top{display:flex;align-items:center;gap:6px}.it-top .it-title{flex:1;min-width:0}
+.thumb{position:relative;margin-top:6px}
+.thumb img{width:100%;height:120px;object-fit:cover;border-radius:6px;display:block;background:var(--line)}
+.thumb b{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;border-radius:999px;padding:0 7px}
 .star{border:0;background:none;cursor:pointer;color:var(--sub);font-size:17px;line-height:1;padding:0 2px}
 .star:hover,.star.on{color:#e0a100}
 #rhead h1 .star{font-size:20px;vertical-align:-2px;margin-right:4px}
@@ -127,10 +130,10 @@ const pad=n=>String(n).padStart(2,"0");
 const isNarrow=()=>matchMedia("(max-width:900px)").matches;
 const COLORS={DEFAULT:["#ffffff","なし"],RED:["#ff6d3f","赤"],ORANGE:["#ff9b00","オレンジ"],YELLOW:["#ffda00","黄"],GREEN:["#95d641","緑"],TEAL:["#1ce8b5","ティール"],BLUE:["#3fc3ff","青"],CERULEAN:["#82b1ff","濃い青"],PURPLE:["#b388ff","紫"],PINK:["#f8bbd0","ピンク"],BROWN:["#d7ccc8","茶"],GRAY:["#b8c4c9","グレー"]};
 const colorOf=c=>COLORS[c]||COLORS.DEFAULT;
-const STATUS=[["all","すべて"],["active","通常"],["pinned","ピン留め"],["archived","アーカイブ"],["trashed","ゴミ箱"]];
+const STATUS=[["all","すべて"],["active","通常"],["archived","アーカイブ"],["trashed","ゴミ箱"]];
 
 let notes=[],byId=new Map(),terms=[],rawQuery="";
-let fImg=false,fStatus="all",fColor=null,fLabel=null,range=null,basis="created";
+let fPin=false,fImg=false,fStatus="all",fColor=null,fLabel=null,range=null,basis="created";
 let filtered=[],heatSource=[],selId=null,shown=150,maxDay="",minDay="";
 const PAGE=150;
 
@@ -244,7 +247,7 @@ function setNotes(items){
   byId=new Map(notes.map(n=>[n.id,n]));
   maxDay="";minDay="";
   notes.forEach(n=>[n.cDay,n.eDay].forEach(d=>{if(d){if(d>maxDay)maxDay=d;if(!minDay||d<minDay)minDay=d}}));
-  range=null;selId=null;fStatus="all";fColor=null;fLabel=null;fImg=false;
+  range=null;selId=null;fStatus="all";fColor=null;fLabel=null;fImg=false;fPin=false;
   $("info").textContent=notes.length?`${notes.length}件`+(savedAt?` ・ 保存 ${fmt(savedAt)}`:""):"";
   $("clear").hidden=!notes.length;
   buildFacets();applyFilters();
@@ -256,7 +259,7 @@ const dayOf=n=>basis==="created"?n.cDay:n.eDay;
 const statusOk=(n,s)=>s==="all"||(s==="active"&&!n.archived&&!n.trashed)||(s==="pinned"&&n.pinned)||(s==="archived"&&n.archived)||(s==="trashed"&&n.trashed);
 function applyFilters(){
   updateFavUI();
-  let arr=notes.filter(n=>(!favOnly||favs[n.key])&&(!fImg||n.hasImg)&&statusOk(n,fStatus)&&(!fColor||n.color===fColor)&&(!fLabel||n.labels.includes(fLabel)));
+  let arr=notes.filter(n=>(!favOnly||favs[n.key])&&(!fImg||n.hasImg)&&(!fPin||n.pinned)&&statusOk(n,fStatus)&&(!fColor||n.color===fColor)&&(!fLabel||n.labels.includes(fLabel)));
   if(terms.length)arr=arr.filter(n=>terms.every(x=>n.allN.includes(x)));
   heatSource=arr;
   if(range)arr=arr.filter(n=>(dayOf(n)||"").startsWith(range));
@@ -281,6 +284,8 @@ function renderFacets(){
   const st=$("f-status");st.replaceChildren();
   STATUS.forEach(([k,l])=>st.append(chip(l,fStatus===k,()=>{fStatus=k;applyFilters()},null,base({s:k,c:fColor,l:fLabel}).length)));
   const imgN=notes.filter(n=>n.hasImg&&statusOk(n,fStatus)&&(!fColor||n.color===fColor)&&(!fLabel||n.labels.includes(fLabel))).length;
+  const pinN=notes.filter(n=>n.pinned&&statusOk(n,fStatus)&&(!fColor||n.color===fColor)&&(!fLabel||n.labels.includes(fLabel))).length;
+  st.append(chip("📌 ピン留め",fPin,()=>{fPin=!fPin;applyFilters()},null,pinN));
   st.append(chip("🖼 画像あり",fImg,()=>{fImg=!fImg;applyFilters()},null,imgN));
   const cc=new Map(),lc=new Map();
   notes.filter(n=>statusOk(n,fStatus)).forEach(n=>{
@@ -299,6 +304,7 @@ function renderActive(){
   const add=(t,fn)=>box.append(chip(t+" ×",true,fn));
   if(range)add("期間: "+range,()=>setRange(null));
   if(fStatus!=="all")add("状態: "+STATUS.find(s=>s[0]===fStatus)[1],()=>{fStatus="all";applyFilters()});
+  if(fPin)add("ピン留め",()=>{fPin=false;applyFilters()});
   if(fImg)add("画像あり",()=>{fImg=false;applyFilters()});
   if(fColor)add("色: "+COLORS[fColor][1],()=>{fColor=null;applyFilters()});
   if(fLabel)add("ラベル: "+fLabel,()=>{fLabel=null;applyFilters()});
@@ -361,12 +367,23 @@ function itemEl(n){
   if(n.pinned)m.append(tagEl("📌"));
   if(n.archived)m.append(tagEl("アーカイブ"));
   if(n.trashed)m.append(tagEl("ゴミ箱","warn"));
-  if(n.hasImg)m.append(tagEl("🖼"));
+  let thumb=null;
+  if(n.hasImg){
+    const imgs=n.att.filter(a=>/^image\//.test(a.mimetype||"")||/\.(jpe?g|png|gif|webp|heic)$/i.test(a.filePath||""));
+    const u=imgs.length?findMedia((imgs[0].filePath||"").split("/").pop()):null;
+    if(u){
+      thumb=document.createElement("div");thumb.className="thumb";
+      const im=document.createElement("img");im.loading="lazy";im.decoding="async";im.alt="";im.src=u;
+      im.onerror=()=>{thumb.remove();m.append(tagEl("🖼"))};
+      thumb.append(im);
+      if(imgs.length>1){const bd=document.createElement("b");bd.textContent="+"+(imgs.length-1);thumb.append(bd)}
+    }else m.append(tagEl("🖼"));
+  }
   if(n.list.length)m.append(tagEl("リスト"));
   n.labels.slice(0,3).forEach(l=>m.append(tagEl("#"+l)));
   const s=document.createElement("div");s.className="it-snip";s.append(hlText(snip(n)));
   const top=document.createElement("div");top.className="it-top";top.append(h,makeStar(n));
-  d.append(top,m,s);return d;
+  d.append(top,m,s);if(thumb)d.append(thumb);return d;
 }
 function renderList(){
   $("count").textContent=notes.length?`${filtered.length} / ${notes.length} 件`:"";
